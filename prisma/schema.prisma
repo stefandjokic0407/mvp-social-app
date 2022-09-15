@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator typegraphql {
+  provider           = "typegraphql-prisma"
+  output             = "../graphql/generated/type-graphql"
+  emitTranspiledCode = true
+}
+
+model Account {
+  id                 Int       @id @default(autoincrement())
+  compoundId         String    @unique @map(name: "compound_id")
+  userId             Int       @map(name: "user_id")
+  providerType       String    @map(name: "provider_type")
+  providerId         String    @map(name: "provider_id")
+  providerAccountId  String    @map(name: "provider_account_id")
+  refreshToken       String?   @map(name: "refresh_token")
+  accessToken        String?   @map(name: "access_token")
+  accessTokenExpires DateTime? @map(name: "access_token_expires")
+  createdAt          DateTime  @default(now()) @map(name: "created_at")
+  updatedAt          DateTime  @default(now()) @map(name: "updated_at")
+
+
+  @@index([providerAccountId], name: "providerAccountId")
+  @@index([providerId], name: "providerId")
+  @@index([userId], name: "userId")
+  @@map(name: "accounts")
+}
+
+model Session {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map(name: "user_id")
+  expires      DateTime
+  sessionToken String   @unique @map(name: "session_token")
+  accessToken  String   @unique @map(name: "access_token")
+  createdAt    DateTime @default(now()) @map(name: "created_at")
+  updatedAt    DateTime @default(now()) @map(name: "updated_at")
+
+  @@map(name: "sessions")
+}
+
+model VerificationRequest {
+  id         Int      @id @default(autoincrement())
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  createdAt  DateTime @default(now()) @map(name: "created_at")
+  updatedAt  DateTime @default(now()) @map(name: "updated_at")
+
+  @@map(name: "verification_requests")
+}
+
+model User {
+  id            Int                    @id @default(autoincrement())
+  name          String?                @db.VarChar(200)
+  bio           String?                @db.VarChar(200)
+  email         String                 @unique @db.VarChar(200)
+  emailVerified DateTime?              @map(name: "email_verified")
+  username      String?                @unique @db.VarChar(200)
+  image         String?
+  role          Role                   @default(USER)
+  totyms        Totym[]                @relation("TotymsByUser")
+  notifications RequestAndShared[]     @relation("NotificationByUser")
+  receivedUser  RequestAndSharedUser[] @relation("ReceivedUser")
+  comments      Comment[]              @relation("CommentsByUser")
+  // likes            Like[]         @relation("LikesByUser")
+  following     User[]                 @relation("FollowRelation")
+  followers     User[]                 @relation("FollowRelation")
+  collections   Collection[]           @relation("CollectionsByUser")
+  createdAt     DateTime               @default(now()) @map(name: "created_at")
+  updatedAt     DateTime               @default(now()) @map(name: "updated_at")
+
+  @@map(name: "users")
+}
+
+model Totym {
+  id            Int                @id @default(autoincrement())
+  title         String
+  description   String?
+  location      String?
+  coverPhoto    String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  items         Item[]             @relation("ItemsForTotyms")
+  notifications RequestAndShared[] @relation("NotificationsForTotyms")
+  user          User               @relation("TotymsByUser", fields: [userId], references: [id])
+  userId        Int
+  collection    Collection[]       @relation("TotymsForCollection")
+  comments      Comment[]          @relation("CommentsForTotyms")
+  // likes       Like[]    @relation("LikesForTotyms")
+}
+
+model Item {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String?
+  image       String? @default("https://res.cloudinary.com/di9t1lu8j/image/upload/v1639458032/logos/ttym-default-item-image_dschf2.png")
+  link        String?
+  address     String? // TODO: Make this an address object
+  orders      String?
+  totym       Totym   @relation("ItemsForTotyms", fields: [totymId], references: [id])
+  totymId     Int
+}
+
+model RequestAndShared {
+  id Int @id @default(autoincrement())
+
+  users      RequestAndSharedUser[] @relation("ReceivedUsers")
+  sender     User                   @relation("NotificationByUser", fields: [senderId], references: [id])
+  senderId   Int                    @map(name: "sender_id")
+  totym      Totym?                 @relation("NotificationsForTotyms", fields: [totymId], references: [id])
+  totymId    Int?
+  totymTitle String?
+  type       NotificationType       @default(REQUEST)
+  message    String?
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  @@map(name: "requests_shareds")
+}
+
+model RequestAndSharedUser {
+  id             Int              @id @default(autoincrement())
+  read           Boolean
+  user           User             @relation("ReceivedUser", fields: [userId], references: [id])
+  userId         Int
+  notifications  RequestAndShared @relation("ReceivedUsers", fields: [notificationId], references: [id])
+  notificationId Int
+
+  @@map(name: "requests_shareds_users")
+}
+
+model Collection {
+  id      Int     @id @default(autoincrement())
+  totym   Totym   @relation("TotymsForCollection", fields: [totymId], references: [id])
+  totymId Int
+  user    User    @relation("CollectionsByUser", fields: [userId], references: [id])
+  userId  Int     @map(name: "user_id")
+  comment String?
+
+  @@map(name: "collections")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  totym     Totym    @relation("CommentsForTotyms", fields: [totymId], references: [id])
+  totymId   Int
+  user      User     @relation("CommentsByUser", fields: [userId], references: [id])
+  userId    Int
+}
+
+// model Like {
+//   id        Int      @id @default(autoincrement())
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+//   user      User     @relation("LikesByUser", fields: [userId], references: [id])
+//   userId    Int
+//   totym     Totym    @relation("LikesForTotyms", fields: [totymId], references: [id])
+//   totymId   Int
+// }
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum NotificationType {
+  REQUEST
+  SHARED
+}
